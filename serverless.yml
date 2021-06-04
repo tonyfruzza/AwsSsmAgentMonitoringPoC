@@ -1,0 +1,45 @@
+service: ssm-agent-mon
+custom:
+  stage_config: ${file(config-${opt:stage}.yml)}
+provider:
+  name: aws
+  runtime: ruby2.7
+  memorySize: 128
+  logRetentionInDays: 30
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - cloudwatch:PutMetricData
+        - cloudwatch:ListMetrics
+        - ec2:DescribeInstances
+        - ssm:DescribeInstanceInformation
+      Resource:
+        - "*"
+
+functions:
+  SsmAgentMon:
+    handler: lambda/ssm-agent-finder.lambda_handler
+    environment: ${file(env_vars-${opt:stage}.yml)}
+    events:
+      - schedule: rate(1 minute)
+resources:
+  Resources:
+    ImageQueueDepthAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmDescription: Alarm triggers when SSM agents are not registering
+        Namespace: AWS/Lambda
+        MetricName: Errors
+        Dimensions:
+          - Name: FunctionName
+            Value:
+              Ref: SsmAgentMonLambdaFunction
+        Statistic: Maximum
+        Period: 60
+        EvaluationPeriods: 15
+        Threshold: 0
+        ComparisonOperator: GreaterThanThreshold
+        AlarmActions:
+          - ${self:custom.stage_config.alarm_sns_arn}
+        OKActions:
+          - ${self:custom.stage_config.alarm_sns_arn}

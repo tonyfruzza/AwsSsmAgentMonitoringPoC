@@ -1,0 +1,202 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: AutoScaling Application Server(s)
+Parameters:
+  EnvironmentName:
+    Type: String
+    Description: Environment to which this stack belongs
+    Default: dev
+  CustomerName:
+    Type: String
+    Description: Environment to which this stack belongs
+  ApplicationName:
+    Type: String
+    Description: The name of the application
+  RoleName:
+    Type: String
+    Description: The role within the application
+  SshKey:
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    Description: SSH Key pair to auth with
+  ImageId:
+    Type: 'AWS::EC2::Image::Id'
+    Description: The AMI to base this instance off of
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC for SG to be created within
+  AvailabilityZones:
+    Type: CommaDelimitedList
+    Description: List of availability zones
+  Subnets:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: List of subnets to launch ec2 instance within
+  AssociatePublicIpAddress:
+    Type: String
+    Description: Should the instances be assigned a public IP address?
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+  InstanceType:
+    Type: String
+    Description: Instnace size
+    Default: t2.small
+    AllowedValues:
+      - c3.2xlarge
+      - c3.4xlarge
+      - c3.8xlarge
+      - c3.large
+      - c3.xlarge
+      - c4.2xlarge
+      - c4.4xlarge
+      - c4.8xlarge
+      - c4.large
+      - c4.xlarge
+      - c4.2xlarge
+      - d2.2xlarge
+      - d2.4xlarge
+      - d2.8xlarge
+      - d2.xlarge
+      - g2.2xlarge
+      - g2.2xlarge
+      - g2.8xlarge
+      - g2.8xlarge
+      - i2.2xlarge
+      - i2.4xlarge
+      - i2.8xlarge
+      - i2.xlarge
+      - m1.xlarge
+      - m3.2xlarge
+      - m3.large
+      - m3.medium
+      - m3.xlarge
+      - m4.10xlarge
+      - m4.2xlarge
+      - m4.4xlarge
+      - m4.large
+      - m4.xlarge
+      - r3.2xlarge
+      - r3.4xlarge
+      - r3.8xlarge
+      - r3.large
+      - r3.xlarge
+      - t2.large
+      - t2.large
+      - t2.medium
+      - t2.micro
+      - t2.small
+Resources:
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SSH open to the world
+      SecurityGroupEgress:
+      - CidrIp: 0.0.0.0/0
+        FromPort: 0
+        IpProtocol: tcp
+        ToPort: 65535
+      SecurityGroupIngress:
+      - CidrIp: 0.0.0.0/0
+        IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+      VpcId:
+        Ref: VpcId
+  # CPUAlarmHigh:
+  #   Type: 'AWS::CloudWatch::Alarm'
+  #   Properties:
+  #     AlarmDescription: !Sub 'CPUUtilization > ${CPUAlarmHighThreshold} for 5 minutes'
+  #     MetricName: CPUUtilization
+  #     Namespace: AWS/EC2
+  #     Statistic: Average
+  #     Period: '60'
+  #     EvaluationPeriods: '5'
+  #     Threshold: !Ref CPUAlarmHighThreshold
+  #     AlarmActions:
+  #       - !Ref ScaleUpPolicy
+  #     Dimensions:
+  #       - Name: AutoScalingGroupName
+  #         Value: !Ref AppServerGroup
+  #     ComparisonOperator: GreaterThanThreshold
+  # CPUAlarmLow:
+  #   Type: 'AWS::CloudWatch::Alarm'
+  #   Properties:
+  #     AlarmDescription: !Sub 'CPUUtilization < ${CPUAlarmLowThreshold} for 30 minutes'
+  #     MetricName: CPUUtilization
+  #     Namespace: AWS/EC2
+  #     Statistic: Average
+  #     Period: '60'
+  #     EvaluationPeriods: '30'
+  #     Threshold: !Ref CPUAlarmLowThreshold
+  #     AlarmActions:
+  #       - !Ref ScaleDownPolicy
+  #     Dimensions:
+  #       - Name: AutoScalingGroupName
+  #         Value: !Ref AppServerGroup
+  #     ComparisonOperator: LessThanThreshold
+
+
+  IamRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+  InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref IamRole
+
+  AppServerGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      MinSize: 1
+      MaxSize: 1
+      AvailabilityZones: !Ref AvailabilityZones
+      VPCZoneIdentifier: !Ref Subnets
+      HealthCheckGracePeriod: 300
+      HealthCheckType: EC2
+      LaunchConfigurationName: !Ref LaunchConfig
+      Tags:
+        - Key: Name
+          Value: !Sub '${CustomerName}-${EnvironmentName}-${ApplicationName}-${RoleName}'
+          PropagateAtLaunch: true
+        - Key: environment
+          Value: !Ref EnvironmentName
+          PropagateAtLaunch: true
+        - Key: application
+          Value: !Ref ApplicationName
+          PropagateAtLaunch: true
+        - Key: role
+          Value: !Ref RoleName
+          PropagateAtLaunch: true
+  LaunchConfig:
+    Type: 'AWS::AutoScaling::LaunchConfiguration'
+    Properties:
+      KeyName: !Ref SshKey
+      ImageId: !Ref ImageId
+      InstanceType: !Ref InstanceType
+      AssociatePublicIpAddress: !Ref AssociatePublicIpAddress
+      IamInstanceProfile: !Ref InstanceProfile
+      SecurityGroups: [ !Ref InstanceSecurityGroup ]
+      # UserData: !Base64
+      #   !Sub |
+      #     #!/bin/sh
+      #     w
+
+Outputs:
+  AppServerGroup:
+    Description: The name of the auto scaling group
+    Value: !Ref AppServerGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-AppServerGroup'

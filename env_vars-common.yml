@@ -1,0 +1,3 @@
+# Monitored instance tags, prefix with tag_ and for multiple values comma delemeted
+tag_environment: production, dev
+tag_role: SingleServer
