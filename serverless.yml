@@ -10,7 +10,6 @@ provider:
     - Effect: Allow
       Action:
         - cloudwatch:PutMetricData
-        - cloudwatch:ListMetrics
         - ssm:SendCommand
         - ssm:DescribeInstanceInformation
       Resource:
