@@ -11,15 +11,14 @@ provider:
       Action:
         - cloudwatch:PutMetricData
         - cloudwatch:ListMetrics
-        - ec2:DescribeInstances
+        - ssm:SendCommand
         - ssm:DescribeInstanceInformation
       Resource:
         - "*"
 
 functions:
   SsmAgentMon:
-    handler: lambda/ssm-agent-finder.lambda_handler
-    environment: ${file(env_vars-${opt:stage}.yml)}
+    handler: lambda/ssm-run-doc.lambda_handler
     events:
       - schedule: rate(1 minute)
 resources:
@@ -28,17 +27,16 @@ resources:
       Type: AWS::CloudWatch::Alarm
       Properties:
         AlarmDescription: Alarm triggers when SSM agents are not registering
-        Namespace: AWS/Lambda
-        MetricName: Errors
+        Namespace: mi-health
+        MetricName: heart-beat
         Dimensions:
-          - Name: FunctionName
-            Value:
-              Ref: SsmAgentMonLambdaFunction
+          - Name: InstanceID
+            Value: mi-06ddebecd7e7cf8e1
         Statistic: Maximum
         Period: 60
-        EvaluationPeriods: 15
-        Threshold: 0
-        ComparisonOperator: GreaterThanThreshold
+        EvaluationPeriods: 5
+        Threshold: 1
+        ComparisonOperator: LessThanThreshold
         AlarmActions:
           - ${self:custom.stage_config.alarm_sns_arn}
         OKActions:
